@@ -63,7 +63,7 @@ public class TripsController : ControllerBase
             Inclusions = dto.Inclusions,
             Exclusions = dto.Exclusions,
             SpotsTotal = dto.SpotsTotal,
-            SpotsLeft = dto.SpotsLeft,
+            SpotsLeft = dto.SpotsTotal, // Set spots left to same as total on creation
             Itinerary = dto.Itinerary.Select(i => new ItineraryDay
             {
                 Day = i.Day,

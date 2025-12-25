@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
 
     public DbSet<Trip> Trips { get; set; }
     public DbSet<ItineraryDay> ItineraryDays { get; set; }
+    public DbSet<Booking> Bookings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +41,17 @@ public class AppDbContext : DbContext
                 .WithMany(t => t.Itinerary)
                 .HasForeignKey(e => e.TripId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Booking>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasOne(e => e.Trip)
+                .WithMany()
+                .HasForeignKey(e => e.TripId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(e => e.Status)
+                .HasConversion<string>();
         });
     }
 }

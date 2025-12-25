@@ -42,6 +42,16 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Configure webhook endpoint to allow raw body reading - must be early in pipeline
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/payments/webhook"))
+    {
+        context.Request.EnableBuffering();
+    }
+    await next();
+});
+
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 app.UseAuthorization();
