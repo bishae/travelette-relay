@@ -296,5 +296,106 @@ public class PaymentsController : ControllerBase
             _logger.LogError(ex, $"Error handling payment failure for {paymentIntent.Id}");
         }
     }
+
+    [HttpPost("refund")]
+    public async Task<ActionResult> RefundBooking(RefundBookingDto dto)
+    {
+        try
+        {
+            var booking = await _context.Bookings
+                .Include(b => b.Trip)
+                .FirstOrDefaultAsync(b => b.Id == dto.BookingId);
+
+            if (booking == null)
+            {
+                _logger.LogWarning($"Booking not found: {dto.BookingId}");
+                return NotFound("Booking not found");
+            }
+
+            if (booking.Status != BookingStatus.Paid)
+            {
+                return BadRequest($"Cannot refund booking with status: {booking.Status}. Only paid bookings can be refunded.");
+            }
+
+            if (string.IsNullOrWhiteSpace(booking.StripePaymentIntentId))
+            {
+                return BadRequest("Booking does not have a valid payment intent ID");
+            }
+
+            // Calculate refund amount (full or partial)
+            var refundAmount = dto.Amount ?? booking.AmountPaid;
+            if (refundAmount <= 0 || refundAmount > booking.AmountPaid)
+            {
+                return BadRequest($"Refund amount must be between 0 and {booking.AmountPaid}");
+            }
+
+            _logger.LogInformation($"Processing refund for booking {booking.Id}: Amount={refundAmount}, Reason={dto.Reason}");
+
+            // Create refund in Stripe
+            var refundService = new RefundService();
+            var refundOptions = new RefundCreateOptions
+            {
+                PaymentIntent = booking.StripePaymentIntentId,
+                Amount = (long)(refundAmount * 100), // Convert to cents
+                Reason = dto.Reason != null ? RefundReasons.RequestedByCustomer : null,
+                Metadata = new Dictionary<string, string>
+                {
+                    { "bookingId", booking.Id.ToString() },
+                    { "customerEmail", booking.CustomerEmail },
+                    { "customerName", booking.CustomerName }
+                }
+            };
+
+            var refund = await refundService.CreateAsync(refundOptions);
+
+            // Update booking status and restore spots based on refund type
+            var isFullRefund = refundAmount == booking.AmountPaid;
+            
+            if (isFullRefund)
+            {
+                // Full refund: mark as refunded and restore spots
+                booking.Status = BookingStatus.Refunded;
+                if (booking.Trip != null)
+                {
+                    booking.Trip.SpotsLeft += booking.SpotsReserved;
+                    booking.Trip.UpdatedAt = DateTime.UtcNow;
+                    _logger.LogInformation($"Restored {booking.SpotsReserved} spots to trip {booking.Trip.Id}");
+                }
+            }
+            else
+            {
+                // Partial refund: keep status as Paid (customer still has booking)
+                // AmountPaid remains as original amount for record-keeping
+                _logger.LogInformation($"Partial refund of {refundAmount} processed. Original amount {booking.AmountPaid} remains on record.");
+            }
+            
+            booking.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation($"Refund successful for booking {booking.Id}, Stripe refund ID: {refund.Id}");
+
+            return Ok(new
+            {
+                success = true,
+                refundId = refund.Id,
+                amount = refundAmount,
+                bookingId = booking.Id,
+                message = refundAmount == booking.AmountPaid 
+                    ? "Full refund processed successfully" 
+                    : $"Partial refund of {refundAmount} processed successfully"
+            });
+        }
+        catch (StripeException ex)
+        {
+            _logger.LogError(ex, "Stripe error processing refund: {Message}", ex.Message);
+            return StatusCode(500, new { error = $"Stripe error: {ex.Message}", details = ex.StripeError?.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing refund: {Message}", ex.Message);
+            return StatusCode(500, new { error = "Error processing refund", details = ex.Message });
+        }
+    }
 }
 
