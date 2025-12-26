@@ -322,14 +322,67 @@ public class PaymentsController : ControllerBase
                 return BadRequest("Booking does not have a valid payment intent ID");
             }
 
-            // Calculate refund amount (full or partial)
-            var refundAmount = dto.Amount ?? booking.AmountPaid;
-            if (refundAmount <= 0 || refundAmount > booking.AmountPaid)
+            if (booking.Trip == null)
             {
-                return BadRequest($"Refund amount must be between 0 and {booking.AmountPaid}");
+                return BadRequest("Booking trip information is missing");
             }
 
-            _logger.LogInformation($"Processing refund for booking {booking.Id}: Amount={refundAmount}, Reason={dto.Reason}");
+            // Calculate refund amount and spots
+            decimal refundAmount;
+            int spotsToRefund;
+            bool isFullRefund;
+
+            if (dto.SpotsToRefund.HasValue)
+            {
+                // Refund by spots
+                spotsToRefund = dto.SpotsToRefund.Value;
+                
+                if (spotsToRefund <= 0)
+                {
+                    return BadRequest("Number of spots to refund must be greater than 0");
+                }
+
+                if (spotsToRefund > booking.SpotsReserved)
+                {
+                    return BadRequest($"Cannot refund {spotsToRefund} spots. Only {booking.SpotsReserved} spots are reserved.");
+                }
+
+                // Calculate refund amount based on price per spot
+                var pricePerSpot = booking.AmountPaid / booking.SpotsReserved;
+                refundAmount = pricePerSpot * spotsToRefund;
+                isFullRefund = spotsToRefund == booking.SpotsReserved;
+            }
+            else if (dto.Amount.HasValue)
+            {
+                // Refund by amount (existing behavior)
+                refundAmount = dto.Amount.Value;
+                if (refundAmount <= 0 || refundAmount > booking.AmountPaid)
+                {
+                    return BadRequest($"Refund amount must be between 0 and {booking.AmountPaid}");
+                }
+
+                // Calculate spots to refund based on amount
+                var pricePerSpot = booking.AmountPaid / booking.SpotsReserved;
+                spotsToRefund = (int)Math.Round(refundAmount / pricePerSpot);
+                
+                // Ensure we don't refund more spots than reserved
+                if (spotsToRefund > booking.SpotsReserved)
+                {
+                    spotsToRefund = booking.SpotsReserved;
+                    refundAmount = booking.AmountPaid; // Full refund
+                }
+                
+                isFullRefund = refundAmount == booking.AmountPaid;
+            }
+            else
+            {
+                // Full refund (no amount or spots specified)
+                refundAmount = booking.AmountPaid;
+                spotsToRefund = booking.SpotsReserved;
+                isFullRefund = true;
+            }
+
+            _logger.LogInformation($"Processing refund for booking {booking.Id}: Spots={spotsToRefund}, Amount={refundAmount}, Reason={dto.Reason}");
 
             // Create refund in Stripe
             var refundService = new RefundService();
@@ -342,33 +395,32 @@ public class PaymentsController : ControllerBase
                 {
                     { "bookingId", booking.Id.ToString() },
                     { "customerEmail", booking.CustomerEmail },
-                    { "customerName", booking.CustomerName }
+                    { "customerName", booking.CustomerName },
+                    { "spotsRefunded", spotsToRefund.ToString() }
                 }
             };
 
             var refund = await refundService.CreateAsync(refundOptions);
 
-            // Update booking status and restore spots based on refund type
-            var isFullRefund = refundAmount == booking.AmountPaid;
-            
+            // Update booking and trip based on refund type
             if (isFullRefund)
             {
-                // Full refund: mark as refunded and restore spots
+                // Full refund: mark as refunded and restore all spots
                 booking.Status = BookingStatus.Refunded;
-                if (booking.Trip != null)
-                {
-                    booking.Trip.SpotsLeft += booking.SpotsReserved;
-                    booking.Trip.UpdatedAt = DateTime.UtcNow;
-                    _logger.LogInformation($"Restored {booking.SpotsReserved} spots to trip {booking.Trip.Id}");
-                }
+                booking.SpotsReserved = 0;
+                booking.Trip.SpotsLeft += spotsToRefund;
+                _logger.LogInformation($"Full refund: Restored {spotsToRefund} spots to trip {booking.Trip.Id}");
             }
             else
             {
-                // Partial refund: keep status as Paid (customer still has booking)
-                // AmountPaid remains as original amount for record-keeping
-                _logger.LogInformation($"Partial refund of {refundAmount} processed. Original amount {booking.AmountPaid} remains on record.");
+                // Partial refund: update spots reserved and restore refunded spots
+                booking.SpotsReserved -= spotsToRefund;
+                booking.Trip.SpotsLeft += spotsToRefund;
+                // Status remains Paid (customer still has remaining spots)
+                _logger.LogInformation($"Partial refund: Refunded {spotsToRefund} spots, {booking.SpotsReserved} spots remaining. Restored {spotsToRefund} spots to trip {booking.Trip.Id}");
             }
             
+            booking.Trip.UpdatedAt = DateTime.UtcNow;
             booking.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -380,10 +432,12 @@ public class PaymentsController : ControllerBase
                 success = true,
                 refundId = refund.Id,
                 amount = refundAmount,
+                spotsRefunded = spotsToRefund,
+                spotsRemaining = booking.SpotsReserved,
                 bookingId = booking.Id,
-                message = refundAmount == booking.AmountPaid 
-                    ? "Full refund processed successfully" 
-                    : $"Partial refund of {refundAmount} processed successfully"
+                message = isFullRefund 
+                    ? $"Full refund processed successfully. {spotsToRefund} spot(s) refunded." 
+                    : $"Partial refund processed successfully. {spotsToRefund} spot(s) refunded, {booking.SpotsReserved} spot(s) remaining."
             });
         }
         catch (StripeException ex)

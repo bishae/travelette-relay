@@ -20,5 +20,6 @@ public class RefundBookingDto
     public Guid BookingId { get; set; }
     public string? Reason { get; set; }
     public decimal? Amount { get; set; } // Optional partial refund amount
+    public int? SpotsToRefund { get; set; } // Optional: refund by number of spots
 }
 
