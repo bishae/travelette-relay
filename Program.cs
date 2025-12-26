@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Travelette.Relay.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,7 +38,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // Add health checks
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<AppDbContext>(name: "database", tags: new[] { "ready" });
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" });
 
 var app = builder.Build();
 
@@ -82,3 +83,33 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+// Custom health check for database
+public class DatabaseHealthCheck : IHealthCheck
+{
+    private readonly AppDbContext _dbContext;
+
+    public DatabaseHealthCheck(AppDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    public async Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var canConnect = await _dbContext.Database.CanConnectAsync(cancellationToken);
+            if (canConnect)
+            {
+                return HealthCheckResult.Healthy("Database is available");
+            }
+            return HealthCheckResult.Unhealthy("Database is not available");
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Database health check failed", ex);
+        }
+    }
+}
