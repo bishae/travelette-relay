@@ -55,23 +55,23 @@ public class TripsController : ControllerBase
         var language = ValidateLanguage(lang);
         var trip = new Trip
         {
-            Title = System.Text.Json.JsonSerializer.Serialize(dto.Title),
-            Location = System.Text.Json.JsonSerializer.Serialize(dto.Location),
+            Title = System.Text.Json.JsonSerializer.Serialize(dto.Title ?? new Dictionary<string, string>()),
+            Location = System.Text.Json.JsonSerializer.Serialize(dto.Location ?? new Dictionary<string, string>()),
             StartDate = dto.StartDate,
             DurationDays = dto.DurationDays,
             Price = dto.Price,
-            Description = System.Text.Json.JsonSerializer.Serialize(dto.Description),
+            Description = System.Text.Json.JsonSerializer.Serialize(dto.Description ?? new Dictionary<string, string>()),
             HeroImage = dto.HeroImage,
-            Gallery = dto.Gallery,
-            Inclusions = System.Text.Json.JsonSerializer.Serialize(dto.Inclusions),
-            Exclusions = System.Text.Json.JsonSerializer.Serialize(dto.Exclusions),
+            Gallery = dto.Gallery ?? new List<string>(),
+            Inclusions = System.Text.Json.JsonSerializer.Serialize(dto.Inclusions ?? new List<Dictionary<string, string>>()),
+            Exclusions = System.Text.Json.JsonSerializer.Serialize(dto.Exclusions ?? new List<Dictionary<string, string>>()),
             SpotsTotal = dto.SpotsTotal,
             SpotsLeft = dto.SpotsTotal, // Set spots left to same as total on creation
-            Itinerary = dto.Itinerary.Select(i => new ItineraryDay
+            Itinerary = (dto.Itinerary ?? new List<CreateItineraryDayDto>()).Select(i => new ItineraryDay
             {
                 Day = i.Day,
-                Title = System.Text.Json.JsonSerializer.Serialize(i.Title),
-                Activity = System.Text.Json.JsonSerializer.Serialize(i.Activity)
+                Title = System.Text.Json.JsonSerializer.Serialize(i.Title ?? new Dictionary<string, string>()),
+                Activity = System.Text.Json.JsonSerializer.Serialize(i.Activity ?? new Dictionary<string, string>())
             }).ToList()
         };
 
@@ -94,31 +94,44 @@ public class TripsController : ControllerBase
             return NotFound();
         }
 
-        trip.Title = System.Text.Json.JsonSerializer.Serialize(dto.Title);
-        trip.Location = System.Text.Json.JsonSerializer.Serialize(dto.Location);
+        trip.Title = System.Text.Json.JsonSerializer.Serialize(dto.Title ?? new Dictionary<string, string>());
+        trip.Location = System.Text.Json.JsonSerializer.Serialize(dto.Location ?? new Dictionary<string, string>());
         trip.StartDate = dto.StartDate;
         trip.DurationDays = dto.DurationDays;
         trip.Price = dto.Price;
-        trip.Description = System.Text.Json.JsonSerializer.Serialize(dto.Description);
+        trip.Description = System.Text.Json.JsonSerializer.Serialize(dto.Description ?? new Dictionary<string, string>());
         trip.HeroImage = dto.HeroImage;
-        trip.Gallery = dto.Gallery;
-        trip.Inclusions = System.Text.Json.JsonSerializer.Serialize(dto.Inclusions);
-        trip.Exclusions = System.Text.Json.JsonSerializer.Serialize(dto.Exclusions);
+        trip.Gallery = dto.Gallery ?? new List<string>();
+        trip.Inclusions = System.Text.Json.JsonSerializer.Serialize(dto.Inclusions ?? new List<Dictionary<string, string>>());
+        trip.Exclusions = System.Text.Json.JsonSerializer.Serialize(dto.Exclusions ?? new List<Dictionary<string, string>>());
         trip.SpotsTotal = dto.SpotsTotal;
         trip.SpotsLeft = dto.SpotsLeft;
         trip.UpdatedAt = DateTime.UtcNow;
 
         // Remove existing itinerary
-        _context.ItineraryDays.RemoveRange(trip.Itinerary);
-
-        // Add new itinerary
-        trip.Itinerary = dto.Itinerary.Select(i => new ItineraryDay
+        if (trip.Itinerary != null && trip.Itinerary.Any())
         {
-            TripId = trip.Id,
-            Day = i.Day,
-            Title = System.Text.Json.JsonSerializer.Serialize(i.Title),
-            Activity = System.Text.Json.JsonSerializer.Serialize(i.Activity)
-        }).ToList();
+            _context.ItineraryDays.RemoveRange(trip.Itinerary);
+        }
+
+        // Add new itinerary items
+        if (dto.Itinerary != null && dto.Itinerary.Any())
+        {
+            var newItineraryItems = dto.Itinerary.Select(i => new ItineraryDay
+            {
+                TripId = trip.Id,
+                Day = i.Day,
+                Title = System.Text.Json.JsonSerializer.Serialize(i.Title ?? new Dictionary<string, string>()),
+                Activity = System.Text.Json.JsonSerializer.Serialize(i.Activity ?? new Dictionary<string, string>())
+            }).ToList();
+            
+            _context.ItineraryDays.AddRange(newItineraryItems);
+            trip.Itinerary = newItineraryItems;
+        }
+        else
+        {
+            trip.Itinerary = new List<ItineraryDay>();
+        }
 
         await _context.SaveChangesAsync();
 
