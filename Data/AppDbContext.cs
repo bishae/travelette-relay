@@ -24,14 +24,8 @@ public class AppDbContext : DbContext
                 .HasConversion(
                     v => string.Join("|||", v),
                     v => v.Split("|||", StringSplitOptions.RemoveEmptyEntries).ToList());
-            entity.Property(e => e.Inclusions)
-                .HasConversion(
-                    v => string.Join("|||", v),
-                    v => v.Split("|||", StringSplitOptions.RemoveEmptyEntries).ToList());
-            entity.Property(e => e.Exclusions)
-                .HasConversion(
-                    v => string.Join("|||", v),
-                    v => v.Split("|||", StringSplitOptions.RemoveEmptyEntries).ToList());
+            // Title, Location, Description, Inclusions, Exclusions are now stored as JSON strings
+            // No conversion needed - they're already strings
         });
 
         modelBuilder.Entity<ItineraryDay>(entity =>

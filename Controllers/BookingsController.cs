@@ -51,7 +51,7 @@ public class BookingsController : ControllerBase
         {
             Id = booking.Id,
             TripId = booking.TripId,
-            TripTitle = booking.Trip?.Title ?? "Unknown Trip",
+            TripTitle = booking.Trip?.GetTitle("en") ?? "Unknown Trip",
             StripePaymentIntentId = booking.StripePaymentIntentId,
             CustomerEmail = booking.CustomerEmail,
             CustomerName = booking.CustomerName,

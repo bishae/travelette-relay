@@ -22,19 +22,21 @@ public class TripsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<TripDto>>> GetTrips()
+    public async Task<ActionResult<IEnumerable<TripDto>>> GetTrips([FromQuery] string? lang = "en")
     {
+        var language = ValidateLanguage(lang);
         var trips = await _context.Trips
             .Include(t => t.Itinerary.OrderBy(i => i.Day))
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
 
-        return Ok(trips.Select(MapToDto));
+        return Ok(trips.Select(t => MapToDto(t, language)));
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<TripDto>> GetTrip(Guid id)
+    public async Task<ActionResult<TripDto>> GetTrip(Guid id, [FromQuery] string? lang = "en")
     {
+        var language = ValidateLanguage(lang);
         var trip = await _context.Trips
             .Include(t => t.Itinerary.OrderBy(i => i.Day))
             .FirstOrDefaultAsync(t => t.Id == id);
@@ -44,43 +46,45 @@ public class TripsController : ControllerBase
             return NotFound();
         }
 
-        return Ok(MapToDto(trip));
+        return Ok(MapToDto(trip, language));
     }
 
     [HttpPost]
-    public async Task<ActionResult<TripDto>> CreateTrip(CreateTripDto dto)
+    public async Task<ActionResult<TripDto>> CreateTrip(CreateTripDto dto, [FromQuery] string? lang = "en")
     {
+        var language = ValidateLanguage(lang);
         var trip = new Trip
         {
-            Title = dto.Title,
-            Location = dto.Location,
+            Title = System.Text.Json.JsonSerializer.Serialize(dto.Title),
+            Location = System.Text.Json.JsonSerializer.Serialize(dto.Location),
             StartDate = dto.StartDate,
             DurationDays = dto.DurationDays,
             Price = dto.Price,
-            Description = dto.Description,
+            Description = System.Text.Json.JsonSerializer.Serialize(dto.Description),
             HeroImage = dto.HeroImage,
             Gallery = dto.Gallery,
-            Inclusions = dto.Inclusions,
-            Exclusions = dto.Exclusions,
+            Inclusions = System.Text.Json.JsonSerializer.Serialize(dto.Inclusions),
+            Exclusions = System.Text.Json.JsonSerializer.Serialize(dto.Exclusions),
             SpotsTotal = dto.SpotsTotal,
             SpotsLeft = dto.SpotsTotal, // Set spots left to same as total on creation
             Itinerary = dto.Itinerary.Select(i => new ItineraryDay
             {
                 Day = i.Day,
-                Title = i.Title,
-                Activity = i.Activity
+                Title = System.Text.Json.JsonSerializer.Serialize(i.Title),
+                Activity = System.Text.Json.JsonSerializer.Serialize(i.Activity)
             }).ToList()
         };
 
         _context.Trips.Add(trip);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetTrip), new { id = trip.Id }, MapToDto(trip));
+        return CreatedAtAction(nameof(GetTrip), new { id = trip.Id }, MapToDto(trip, language));
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateTrip(Guid id, UpdateTripDto dto)
+    public async Task<IActionResult> UpdateTrip(Guid id, UpdateTripDto dto, [FromQuery] string? lang = "en")
     {
+        var language = ValidateLanguage(lang);
         var trip = await _context.Trips
             .Include(t => t.Itinerary)
             .FirstOrDefaultAsync(t => t.Id == id);
@@ -90,16 +94,16 @@ public class TripsController : ControllerBase
             return NotFound();
         }
 
-        trip.Title = dto.Title;
-        trip.Location = dto.Location;
+        trip.Title = System.Text.Json.JsonSerializer.Serialize(dto.Title);
+        trip.Location = System.Text.Json.JsonSerializer.Serialize(dto.Location);
         trip.StartDate = dto.StartDate;
         trip.DurationDays = dto.DurationDays;
         trip.Price = dto.Price;
-        trip.Description = dto.Description;
+        trip.Description = System.Text.Json.JsonSerializer.Serialize(dto.Description);
         trip.HeroImage = dto.HeroImage;
         trip.Gallery = dto.Gallery;
-        trip.Inclusions = dto.Inclusions;
-        trip.Exclusions = dto.Exclusions;
+        trip.Inclusions = System.Text.Json.JsonSerializer.Serialize(dto.Inclusions);
+        trip.Exclusions = System.Text.Json.JsonSerializer.Serialize(dto.Exclusions);
         trip.SpotsTotal = dto.SpotsTotal;
         trip.SpotsLeft = dto.SpotsLeft;
         trip.UpdatedAt = DateTime.UtcNow;
@@ -112,13 +116,13 @@ public class TripsController : ControllerBase
         {
             TripId = trip.Id,
             Day = i.Day,
-            Title = i.Title,
-            Activity = i.Activity
+            Title = System.Text.Json.JsonSerializer.Serialize(i.Title),
+            Activity = System.Text.Json.JsonSerializer.Serialize(i.Activity)
         }).ToList();
 
         await _context.SaveChangesAsync();
 
-        return Ok(MapToDto(trip));
+        return Ok(MapToDto(trip, language));
     }
 
     [HttpDelete("{id}")]
@@ -136,7 +140,7 @@ public class TripsController : ControllerBase
         return NoContent();
     }
 
-    private TripDto MapToDto(Trip trip)
+    private TripDto MapToDto(Trip trip, string language = "en")
     {
         var endDate = trip.StartDate.AddDays(trip.DurationDays - 1);
         var dateString = FormatDateRange(trip.StartDate, endDate);
@@ -147,30 +151,47 @@ public class TripsController : ControllerBase
         return new TripDto
         {
             Id = trip.Id,
-            Title = trip.Title,
-            Location = trip.Location,
+            Title = trip.GetTitle(language),
+            Location = trip.GetLocation(language),
             Date = dateString,
             Duration = durationString,
             StartDate = trip.StartDate,
             DurationDays = trip.DurationDays,
             Price = priceString,
             PriceAmount = trip.Price,
-            Description = trip.Description,
+            Description = trip.GetDescription(language),
             HeroImage = trip.HeroImage,
             Gallery = trip.Gallery,
             Itinerary = trip.Itinerary.Select(i => new ItineraryDayDto
             {
                 Id = i.Id,
                 Day = i.Day,
-                Title = i.Title,
-                Activity = i.Activity
+                Title = i.GetTitle(language),
+                Activity = i.GetActivity(language)
             }).ToList(),
-            Inclusions = trip.Inclusions,
-            Exclusions = trip.Exclusions,
+            Inclusions = trip.GetInclusions(language),
+            Exclusions = trip.GetExclusions(language),
             SpotsTotal = trip.SpotsTotal,
             SpotsLeft = trip.SpotsLeft,
             CreatedAt = trip.CreatedAt,
             UpdatedAt = trip.UpdatedAt
+        };
+    }
+
+    private static string ValidateLanguage(string? lang)
+    {
+        if (string.IsNullOrEmpty(lang))
+            return "en";
+        
+        // Normalize language code
+        lang = lang.ToLower().Trim();
+        
+        // Supported languages
+        return lang switch
+        {
+            "en" => "en",
+            "ar" => "ar",
+            _ => "en" // Default to English if unsupported
         };
     }
 
