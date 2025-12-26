@@ -19,7 +19,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:5175",
                 "http://localhost:5176",
                 "https://localhost:5173",
-                "https://localhost:5174"
+                "https://localhost:5174",
+                "https://travelette.netlify.app"
               )
               .AllowAnyHeader()
               .AllowAnyMethod()
