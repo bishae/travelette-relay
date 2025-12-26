@@ -27,12 +27,24 @@ public class Trip
     {
         try
         {
+            if (string.IsNullOrEmpty(Title))
+                return string.Empty;
+            
+            // Handle old format (plain string) - migrate on the fly
+            var trimmed = Title.TrimStart();
+            if (!trimmed.StartsWith("{") && !trimmed.StartsWith("["))
+            {
+                // Old format: plain string, treat as English
+                return Title;
+            }
+            
             var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Title) ?? new Dictionary<string, string>();
             return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
         }
         catch
         {
-            return string.Empty;
+            // If deserialization fails, treat as old format plain string
+            return string.IsNullOrEmpty(Title) ? string.Empty : Title;
         }
     }
 
@@ -54,12 +66,24 @@ public class Trip
     {
         try
         {
+            if (string.IsNullOrEmpty(Location))
+                return string.Empty;
+            
+            // Handle old format (plain string) - migrate on the fly
+            var trimmed = Location.TrimStart();
+            if (!trimmed.StartsWith("{") && !trimmed.StartsWith("["))
+            {
+                // Old format: plain string, treat as English
+                return Location;
+            }
+            
             var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Location) ?? new Dictionary<string, string>();
             return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
         }
         catch
         {
-            return string.Empty;
+            // If deserialization fails, treat as old format plain string
+            return string.IsNullOrEmpty(Location) ? string.Empty : Location;
         }
     }
 
@@ -81,12 +105,24 @@ public class Trip
     {
         try
         {
+            if (string.IsNullOrEmpty(Description))
+                return string.Empty;
+            
+            // Handle old format (plain string) - migrate on the fly
+            var trimmed = Description.TrimStart();
+            if (!trimmed.StartsWith("{") && !trimmed.StartsWith("["))
+            {
+                // Old format: plain string, treat as English
+                return Description;
+            }
+            
             var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Description) ?? new Dictionary<string, string>();
             return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
         }
         catch
         {
-            return string.Empty;
+            // If deserialization fails, treat as old format plain string
+            return string.IsNullOrEmpty(Description) ? string.Empty : Description;
         }
     }
 
@@ -108,6 +144,14 @@ public class Trip
     {
         try
         {
+            // Handle old format - check if it's a JSON array of dictionaries
+            if (string.IsNullOrEmpty(Inclusions) || !Inclusions.TrimStart().StartsWith("["))
+            {
+                // Old format: might be stored differently, return empty for now
+                // Could be a delimited string in old format, but we'll handle it as empty
+                return new List<string>();
+            }
+            
             var list = JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Inclusions) ?? new List<Dictionary<string, string>>();
             return list.Select(item => item.TryGetValue(language, out var value) ? value : (item.TryGetValue("en", out var enValue) ? enValue : string.Empty)).Where(s => !string.IsNullOrEmpty(s)).ToList();
         }
@@ -147,6 +191,14 @@ public class Trip
     {
         try
         {
+            // Handle old format - check if it's a JSON array of dictionaries
+            if (string.IsNullOrEmpty(Exclusions) || !Exclusions.TrimStart().StartsWith("["))
+            {
+                // Old format: might be stored differently, return empty for now
+                // Could be a delimited string in old format, but we'll handle it as empty
+                return new List<string>();
+            }
+            
             var list = JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Exclusions) ?? new List<Dictionary<string, string>>();
             return list.Select(item => item.TryGetValue(language, out var value) ? value : (item.TryGetValue("en", out var enValue) ? enValue : string.Empty)).Where(s => !string.IsNullOrEmpty(s)).ToList();
         }
@@ -198,12 +250,24 @@ public class ItineraryDay
     {
         try
         {
+            if (string.IsNullOrEmpty(Title))
+                return string.Empty;
+            
+            // Handle old format (plain string) - migrate on the fly
+            var trimmed = Title.TrimStart();
+            if (!trimmed.StartsWith("{") && !trimmed.StartsWith("["))
+            {
+                // Old format: plain string, treat as English
+                return Title;
+            }
+            
             var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Title) ?? new Dictionary<string, string>();
             return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
         }
         catch
         {
-            return string.Empty;
+            // If deserialization fails, treat as old format plain string
+            return string.IsNullOrEmpty(Title) ? string.Empty : Title;
         }
     }
 
@@ -225,12 +289,24 @@ public class ItineraryDay
     {
         try
         {
+            if (string.IsNullOrEmpty(Activity))
+                return string.Empty;
+            
+            // Handle old format (plain string) - migrate on the fly
+            var trimmed = Activity.TrimStart();
+            if (!trimmed.StartsWith("{") && !trimmed.StartsWith("["))
+            {
+                // Old format: plain string, treat as English
+                return Activity;
+            }
+            
             var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Activity) ?? new Dictionary<string, string>();
             return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
         }
         catch
         {
-            return string.Empty;
+            // If deserialization fails, treat as old format plain string
+            return string.IsNullOrEmpty(Activity) ? string.Empty : Activity;
         }
     }
 
