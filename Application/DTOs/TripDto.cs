@@ -72,3 +72,8 @@ public class UpdateTripDto
     public int SpotsLeft { get; set; }
 }
 
+public class RefundAllBookingsDto
+{
+    public string? Reason { get; set; }
+}
+

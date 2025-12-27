@@ -201,6 +201,67 @@ public class PaymentApplicationService : IPaymentApplicationService
         );
     }
 
+    public async Task<RefundAllResult> RefundAllBookingsForTripAsync(Guid tripId, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        // Verify trip exists
+        var trip = await _tripRepository.GetByIdAsync(tripId);
+        if (trip == null)
+        {
+            throw new InvalidOperationException($"Trip not found: {tripId}");
+        }
+
+        // Get all paid bookings for this trip
+        var bookings = await _bookingRepository.GetByTripIdAsync(tripId);
+        var paidBookings = bookings.Where(b => b.Status == BookingStatus.Paid).ToList();
+
+        if (!paidBookings.Any())
+        {
+            return new RefundAllResult(0, 0, 0, new List<RefundResult>());
+        }
+
+        var individualRefunds = new List<RefundResult>();
+        int totalSpotsRefunded = 0;
+        decimal totalAmountRefunded = 0;
+
+        // Refund each booking
+        foreach (var booking in paidBookings)
+        {
+            try
+            {
+                var refundDto = new RefundBookingDto
+                {
+                    BookingId = booking.Id,
+                    Reason = reason
+                };
+
+                var refundResult = await ProcessRefundAsync(refundDto, cancellationToken);
+                individualRefunds.Add(refundResult);
+                totalSpotsRefunded += refundResult.SpotsRefunded;
+                totalAmountRefunded += refundResult.Amount;
+
+                _logger.LogInformation(
+                    $"Refunded booking {booking.Id} for trip {tripId}. Amount: {refundResult.Amount}, Spots: {refundResult.SpotsRefunded}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error refunding booking {booking.Id} for trip {tripId}");
+                // Continue with other bookings even if one fails
+                // The error will be logged but we'll still try to refund the rest
+            }
+        }
+
+        _logger.LogInformation(
+            $"Completed refund all for trip {tripId}. Total bookings refunded: {individualRefunds.Count}, " +
+            $"Total spots: {totalSpotsRefunded}, Total amount: {totalAmountRefunded}");
+
+        return new RefundAllResult(
+            individualRefunds.Count,
+            totalSpotsRefunded,
+            totalAmountRefunded,
+            individualRefunds
+        );
+    }
+
     public async Task ProcessWebhookEventAsync(string jsonPayload, string signature, CancellationToken cancellationToken = default)
     {
         var webhookEvent = await _paymentService.ParseWebhookEventAsync(jsonPayload, signature, cancellationToken);

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Travelette.Relay.Application.DTOs;
 using Travelette.Relay.Application.Services;
 
@@ -9,10 +10,17 @@ namespace Travelette.Relay.Presentation.Controllers;
 public class TripsController : ControllerBase
 {
     private readonly ITripService _tripService;
+    private readonly IPaymentApplicationService _paymentService;
+    private readonly ILogger<TripsController> _logger;
 
-    public TripsController(ITripService tripService)
+    public TripsController(
+        ITripService tripService,
+        IPaymentApplicationService paymentService,
+        ILogger<TripsController> logger)
     {
         _tripService = tripService;
+        _paymentService = paymentService;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -76,17 +84,61 @@ public class TripsController : ControllerBase
         return Ok(trip);
     }
 
+    [HttpPost("{id}/refund-all")]
+    public async Task<IActionResult> RefundAllBookings(Guid id, [FromBody] RefundAllBookingsDto? dto = null)
+    {
+        try
+        {
+            var result = await _paymentService.RefundAllBookingsForTripAsync(id, dto?.Reason);
+            return Ok(new
+            {
+                success = true,
+                totalBookingsRefunded = result.TotalBookingsRefunded,
+                totalSpotsRefunded = result.TotalSpotsRefunded,
+                totalAmountRefunded = result.TotalAmountRefunded,
+                message = $"Successfully refunded {result.TotalBookingsRefunded} booking(s). {result.TotalSpotsRefunded} spot(s) refunded, ${result.TotalAmountRefunded:N2} total."
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation refunding all bookings for trip {TripId}", id);
+            if (ex.Message.Contains("not found"))
+            {
+                return NotFound(ex.Message);
+            }
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error refunding all bookings for trip {TripId}", id);
+            return StatusCode(500, new { error = "Error processing refunds", details = ex.Message });
+        }
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteTrip(Guid id)
     {
-        var deleted = await _tripService.DeleteTripAsync(id);
-        
-        if (!deleted)
+        try
         {
-            return NotFound();
-        }
+            var deleted = await _tripService.DeleteTripAsync(id);
+            
+            if (!deleted)
+            {
+                return NotFound();
+            }
 
-        return NoContent();
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Cannot delete trip {TripId}: {Message}", id, ex.Message);
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting trip {TripId}", id);
+            return StatusCode(500, new { error = "Error deleting trip", details = ex.Message });
+        }
     }
 
     private static string ValidateLanguage(string? lang)

@@ -36,6 +36,15 @@ public class BookingRepository : IBookingRepository
             .FirstOrDefaultAsync(b => b.StripePaymentIntentId == paymentIntentId);
     }
 
+    public async Task<IEnumerable<Booking>> GetByTripIdAsync(Guid tripId)
+    {
+        return await _context.Bookings
+            .Include(b => b.Trip)
+            .Where(b => b.TripId == tripId)
+            .OrderByDescending(b => b.CreatedAt)
+            .ToListAsync();
+    }
+
     public async Task<Booking> AddAsync(Booking booking)
     {
         _context.Bookings.Add(booking);

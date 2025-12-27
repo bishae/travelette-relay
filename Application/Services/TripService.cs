@@ -8,15 +8,18 @@ namespace Travelette.Relay.Application.Services;
 public class TripService : ITripService
 {
     private readonly ITripRepository _tripRepository;
+    private readonly IBookingRepository _bookingRepository;
     private readonly ILogger<TripService> _logger;
     private readonly IConfigurationService _configurationService;
 
     public TripService(
         ITripRepository tripRepository,
+        IBookingRepository bookingRepository,
         ILogger<TripService> logger,
         IConfigurationService configurationService)
     {
         _tripRepository = tripRepository;
+        _bookingRepository = bookingRepository;
         _logger = logger;
         _configurationService = configurationService;
     }
@@ -116,6 +119,18 @@ public class TripService : ITripService
         if (trip == null)
         {
             return false;
+        }
+
+        // Check if there are any paid bookings (reserved spots) for this trip
+        var bookings = await _bookingRepository.GetByTripIdAsync(id);
+        var paidBookings = bookings.Where(b => b.Status == BookingStatus.Paid).ToList();
+        
+        if (paidBookings.Any())
+        {
+            var totalReservedSpots = paidBookings.Sum(b => b.SpotsReserved);
+            throw new InvalidOperationException(
+                $"Cannot delete trip. There are {totalReservedSpots} reserved spot(s) ({paidBookings.Count} paid booking(s)). " +
+                "Please refund all customers before deleting the trip.");
         }
 
         await _tripRepository.DeleteAsync(id);
