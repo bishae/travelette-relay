@@ -83,6 +83,7 @@ public class TripsController : ControllerBase
         {
             "en" => "en",
             "ar" => "ar",
+            "fr" => "fr",
             _ => "en"
         };
     }
