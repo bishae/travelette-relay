@@ -174,23 +174,34 @@ public class PaymentApplicationService : IPaymentApplicationService
             ),
             cancellationToken);
 
+        // Store trip ID and calculate updated spots left
+        var tripId = booking.TripId;
+        var updatedSpotsLeft = booking.Trip.SpotsLeft + spotsToRefund;
+        
         // Update booking and trip based on refund type
         if (isFullRefund)
         {
             booking.Status = BookingStatus.Refunded;
             booking.SpotsReserved = 0;
-            booking.Trip.SpotsLeft += spotsToRefund;
         }
         else
         {
             booking.SpotsReserved -= spotsToRefund;
-            booking.Trip.SpotsLeft += spotsToRefund;
         }
         
-        booking.Trip.UpdatedAt = DateTime.UtcNow;
         booking.UpdatedAt = DateTime.UtcNow;
 
         await _bookingRepository.UpdateAsync(booking);
+        
+        // Explicitly update the trip to ensure SpotsLeft changes are persisted
+        // Reload the trip to get a tracked entity and update it
+        var trip = await _tripRepository.GetByIdAsync(tripId);
+        if (trip != null)
+        {
+            trip.SpotsLeft = updatedSpotsLeft;
+            trip.UpdatedAt = DateTime.UtcNow;
+            await _tripRepository.UpdateAsync(trip);
+        }
 
         return new RefundResult(
             refundResult.RefundId,
@@ -224,6 +235,7 @@ public class PaymentApplicationService : IPaymentApplicationService
         decimal totalAmountRefunded = 0;
 
         // Refund each booking
+        // Note: ProcessRefundAsync now handles trip updates explicitly
         foreach (var booking in paidBookings)
         {
             try
