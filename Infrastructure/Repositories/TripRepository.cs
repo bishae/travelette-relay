@@ -38,31 +38,27 @@ public class TripRepository : ITripRepository
 
     public async Task UpdateAsync(Trip trip)
     {
-        // Remove existing itinerary that's not in the new list
-        var existingItineraryIds = trip.Itinerary.Select(i => i.Id).ToList();
-        var itineraryToRemove = await _context.ItineraryDays
-            .Where(i => i.TripId == trip.Id && !existingItineraryIds.Contains(i.Id))
+        // Remove all existing itinerary items for this trip
+        // We'll replace them all with the new list
+        var existingItinerary = await _context.ItineraryDays
+            .Where(i => i.TripId == trip.Id)
             .ToListAsync();
         
-        if (itineraryToRemove.Any())
+        if (existingItinerary.Any())
         {
-            _context.ItineraryDays.RemoveRange(itineraryToRemove);
+            _context.ItineraryDays.RemoveRange(existingItinerary);
         }
 
-        // Add or update itinerary items
+        // Add new itinerary items (all items in the list are treated as new)
         foreach (var itineraryDay in trip.Itinerary)
         {
-            if (itineraryDay.Id == default(Guid))
+            if (itineraryDay.Id != default(Guid))
             {
-                // New item
-                itineraryDay.TripId = trip.Id;
-                _context.ItineraryDays.Add(itineraryDay);
+                // Reset ID to default so EF treats it as new
+                itineraryDay.Id = default(Guid);
             }
-            else
-            {
-                // Existing item - update it
-                _context.ItineraryDays.Update(itineraryDay);
-            }
+            itineraryDay.TripId = trip.Id;
+            _context.ItineraryDays.Add(itineraryDay);
         }
 
         _context.Trips.Update(trip);

@@ -46,10 +46,27 @@ public class TripsController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateTrip(Guid id, UpdateTripDto dto, [FromQuery] string? lang = "en")
+    public async Task<IActionResult> UpdateTrip(Guid id, CreateTripDto dto, [FromQuery] string? lang = "en")
     {
         var language = ValidateLanguage(lang);
-        var trip = await _tripService.UpdateTripAsync(id, dto, language);
+        // Convert CreateTripDto to UpdateTripDto (they're identical in structure)
+        var updateDto = new UpdateTripDto
+        {
+            Title = dto.Title ?? new Dictionary<string, string>(),
+            Location = dto.Location ?? new Dictionary<string, string>(),
+            StartDate = dto.StartDate,
+            DurationDays = dto.DurationDays,
+            Price = dto.Price,
+            Description = dto.Description ?? new Dictionary<string, string>(),
+            HeroImage = dto.HeroImage,
+            Gallery = dto.Gallery ?? new List<string>(),
+            Itinerary = dto.Itinerary ?? new List<CreateItineraryDayDto>(),
+            Inclusions = dto.Inclusions ?? new List<Dictionary<string, string>>(),
+            Exclusions = dto.Exclusions ?? new List<Dictionary<string, string>>(),
+            SpotsTotal = dto.SpotsTotal,
+            SpotsLeft = dto.SpotsLeft
+        };
+        var trip = await _tripService.UpdateTripAsync(id, updateDto, language);
         
         if (trip == null)
         {

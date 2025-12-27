@@ -94,6 +94,7 @@ public class TripService : ITripService
         {
             trip.Itinerary = dto.Itinerary.Select(i => new ItineraryDay
             {
+                Id = default(Guid), // Set to default so repository can detect as new item
                 TripId = trip.Id,
                 Day = i.Day,
                 Title = System.Text.Json.JsonSerializer.Serialize(i.Title ?? new Dictionary<string, string>()),
