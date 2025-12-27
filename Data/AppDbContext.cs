@@ -1,8 +1,12 @@
+// Legacy compatibility file - kept for migrations compatibility
+// All new code should use Travelette.Relay.Infrastructure.Data.AppDbContext
 using Microsoft.EntityFrameworkCore;
-using Travelette.Relay.Models;
+using Travelette.Relay.Domain.Entities;
 
 namespace Travelette.Relay.Data;
 
+// This is kept for backwards compatibility with existing migrations
+// which reference "Travelette.Relay.Data.AppDbContext"
 public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
@@ -24,8 +28,6 @@ public class AppDbContext : DbContext
                 .HasConversion(
                     v => string.Join("|||", v),
                     v => v.Split("|||", StringSplitOptions.RemoveEmptyEntries).ToList());
-            // Title, Location, Description, Inclusions, Exclusions are now stored as JSON strings
-            // No conversion needed - they're already strings
         });
 
         modelBuilder.Entity<ItineraryDay>(entity =>
@@ -49,4 +51,3 @@ public class AppDbContext : DbContext
         });
     }
 }
-

@@ -1,6 +1,4 @@
-using System.Text.Json;
-
-namespace Travelette.Relay.Models;
+namespace Travelette.Relay.Domain.Entities;
 
 public class Trip
 {
@@ -38,7 +36,7 @@ public class Trip
                 return Title;
             }
             
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Title) ?? new Dictionary<string, string>();
+            var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(Title) ?? new Dictionary<string, string>();
             return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
         }
         catch
@@ -52,13 +50,13 @@ public class Trip
     {
         try
         {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Title) ?? new Dictionary<string, string>();
+            var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(Title) ?? new Dictionary<string, string>();
             dict[language] = value;
-            Title = JsonSerializer.Serialize(dict);
+            Title = System.Text.Json.JsonSerializer.Serialize(dict);
         }
         catch
         {
-            Title = JsonSerializer.Serialize(new Dictionary<string, string> { { language, value } });
+            Title = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { { language, value } });
         }
     }
 
@@ -77,7 +75,7 @@ public class Trip
                 return Location;
             }
             
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Location) ?? new Dictionary<string, string>();
+            var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(Location) ?? new Dictionary<string, string>();
             return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
         }
         catch
@@ -91,13 +89,13 @@ public class Trip
     {
         try
         {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Location) ?? new Dictionary<string, string>();
+            var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(Location) ?? new Dictionary<string, string>();
             dict[language] = value;
-            Location = JsonSerializer.Serialize(dict);
+            Location = System.Text.Json.JsonSerializer.Serialize(dict);
         }
         catch
         {
-            Location = JsonSerializer.Serialize(new Dictionary<string, string> { { language, value } });
+            Location = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { { language, value } });
         }
     }
 
@@ -116,7 +114,7 @@ public class Trip
                 return Description;
             }
             
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Description) ?? new Dictionary<string, string>();
+            var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(Description) ?? new Dictionary<string, string>();
             return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
         }
         catch
@@ -130,13 +128,13 @@ public class Trip
     {
         try
         {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Description) ?? new Dictionary<string, string>();
+            var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(Description) ?? new Dictionary<string, string>();
             dict[language] = value;
-            Description = JsonSerializer.Serialize(dict);
+            Description = System.Text.Json.JsonSerializer.Serialize(dict);
         }
         catch
         {
-            Description = JsonSerializer.Serialize(new Dictionary<string, string> { { language, value } });
+            Description = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { { language, value } });
         }
     }
 
@@ -152,7 +150,7 @@ public class Trip
                 return new List<string>();
             }
             
-            var list = JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Inclusions) ?? new List<Dictionary<string, string>>();
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Inclusions) ?? new List<Dictionary<string, string>>();
             return list.Select(item => item.TryGetValue(language, out var value) ? value : (item.TryGetValue("en", out var enValue) ? enValue : string.Empty)).Where(s => !string.IsNullOrEmpty(s)).ToList();
         }
         catch
@@ -165,7 +163,7 @@ public class Trip
     {
         try
         {
-            var existing = JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Inclusions) ?? new List<Dictionary<string, string>>();
+            var existing = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Inclusions) ?? new List<Dictionary<string, string>>();
             // Update or add items
             for (int i = 0; i < values.Count; i++)
             {
@@ -178,12 +176,12 @@ public class Trip
                     existing.Add(new Dictionary<string, string> { { language, values[i] } });
                 }
             }
-            Inclusions = JsonSerializer.Serialize(existing);
+            Inclusions = System.Text.Json.JsonSerializer.Serialize(existing);
         }
         catch
         {
             var list = values.Select(v => new Dictionary<string, string> { { language, v } }).ToList();
-            Inclusions = JsonSerializer.Serialize(list);
+            Inclusions = System.Text.Json.JsonSerializer.Serialize(list);
         }
     }
 
@@ -199,7 +197,7 @@ public class Trip
                 return new List<string>();
             }
             
-            var list = JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Exclusions) ?? new List<Dictionary<string, string>>();
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Exclusions) ?? new List<Dictionary<string, string>>();
             return list.Select(item => item.TryGetValue(language, out var value) ? value : (item.TryGetValue("en", out var enValue) ? enValue : string.Empty)).Where(s => !string.IsNullOrEmpty(s)).ToList();
         }
         catch
@@ -212,7 +210,7 @@ public class Trip
     {
         try
         {
-            var existing = JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Exclusions) ?? new List<Dictionary<string, string>>();
+            var existing = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, string>>>(Exclusions) ?? new List<Dictionary<string, string>>();
             // Update or add items
             for (int i = 0; i < values.Count; i++)
             {
@@ -225,102 +223,12 @@ public class Trip
                     existing.Add(new Dictionary<string, string> { { language, values[i] } });
                 }
             }
-            Exclusions = JsonSerializer.Serialize(existing);
+            Exclusions = System.Text.Json.JsonSerializer.Serialize(existing);
         }
         catch
         {
             var list = values.Select(v => new Dictionary<string, string> { { language, v } }).ToList();
-            Exclusions = JsonSerializer.Serialize(list);
-        }
-    }
-}
-
-public class ItineraryDay
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid TripId { get; set; }
-    public Trip? Trip { get; set; }
-    public int Day { get; set; }
-    // Multi-language fields stored as JSON: { "en": "English text", "ar": "Arabic text" }
-    public string Title { get; set; } = "{}"; // JSON object with language keys
-    public string Activity { get; set; } = "{}"; // JSON object with language keys
-
-    // Helper methods to get/set translated values
-    public string GetTitle(string language = "en")
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(Title))
-                return string.Empty;
-            
-            // Handle old format (plain string) - migrate on the fly
-            var trimmed = Title.TrimStart();
-            if (!trimmed.StartsWith("{") && !trimmed.StartsWith("["))
-            {
-                // Old format: plain string, treat as English
-                return Title;
-            }
-            
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Title) ?? new Dictionary<string, string>();
-            return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
-        }
-        catch
-        {
-            // If deserialization fails, treat as old format plain string
-            return string.IsNullOrEmpty(Title) ? string.Empty : Title;
-        }
-    }
-
-    public void SetTitle(string language, string value)
-    {
-        try
-        {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Title) ?? new Dictionary<string, string>();
-            dict[language] = value;
-            Title = JsonSerializer.Serialize(dict);
-        }
-        catch
-        {
-            Title = JsonSerializer.Serialize(new Dictionary<string, string> { { language, value } });
-        }
-    }
-
-    public string GetActivity(string language = "en")
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(Activity))
-                return string.Empty;
-            
-            // Handle old format (plain string) - migrate on the fly
-            var trimmed = Activity.TrimStart();
-            if (!trimmed.StartsWith("{") && !trimmed.StartsWith("["))
-            {
-                // Old format: plain string, treat as English
-                return Activity;
-            }
-            
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Activity) ?? new Dictionary<string, string>();
-            return dict.TryGetValue(language, out var value) ? value : (dict.TryGetValue("en", out var enValue) ? enValue : string.Empty);
-        }
-        catch
-        {
-            // If deserialization fails, treat as old format plain string
-            return string.IsNullOrEmpty(Activity) ? string.Empty : Activity;
-        }
-    }
-
-    public void SetActivity(string language, string value)
-    {
-        try
-        {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(Activity) ?? new Dictionary<string, string>();
-            dict[language] = value;
-            Activity = JsonSerializer.Serialize(dict);
-        }
-        catch
-        {
-            Activity = JsonSerializer.Serialize(new Dictionary<string, string> { { language, value } });
+            Exclusions = System.Text.Json.JsonSerializer.Serialize(list);
         }
     }
 }

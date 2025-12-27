@@ -1,58 +1,40 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Travelette.Relay.Data;
-using Travelette.Relay.DTOs;
-using Travelette.Relay.Models;
+using Microsoft.Extensions.Logging;
+using Travelette.Relay.Application.DTOs;
+using Travelette.Relay.Domain.Entities;
+using Travelette.Relay.Domain.Repositories;
 
-namespace Travelette.Relay.Controllers;
+namespace Travelette.Relay.Application.Services;
 
-[ApiController]
-[Route("api/[controller]")]
-public class TripsController : ControllerBase
+public class TripService : ITripService
 {
-    private readonly AppDbContext _context;
-    private readonly ILogger<TripsController> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly ITripRepository _tripRepository;
+    private readonly ILogger<TripService> _logger;
+    private readonly IConfigurationService _configurationService;
 
-    public TripsController(AppDbContext context, ILogger<TripsController> logger, IConfiguration configuration)
+    public TripService(
+        ITripRepository tripRepository,
+        ILogger<TripService> logger,
+        IConfigurationService configurationService)
     {
-        _context = context;
+        _tripRepository = tripRepository;
         _logger = logger;
-        _configuration = configuration;
+        _configurationService = configurationService;
     }
 
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<TripDto>>> GetTrips([FromQuery] string? lang = "en")
+    public async Task<IEnumerable<TripDto>> GetTripsAsync(string language = "en")
     {
-        var language = ValidateLanguage(lang);
-        var trips = await _context.Trips
-            .Include(t => t.Itinerary.OrderBy(i => i.Day))
-            .OrderByDescending(t => t.CreatedAt)
-            .ToListAsync();
-
-        return Ok(trips.Select(t => MapToDto(t, language)));
+        var trips = await _tripRepository.GetAllAsync();
+        return trips.Select(t => MapToDto(t, language));
     }
 
-    [HttpGet("{id}")]
-    public async Task<ActionResult<TripDto>> GetTrip(Guid id, [FromQuery] string? lang = "en")
+    public async Task<TripDto?> GetTripByIdAsync(Guid id, string language = "en")
     {
-        var language = ValidateLanguage(lang);
-        var trip = await _context.Trips
-            .Include(t => t.Itinerary.OrderBy(i => i.Day))
-            .FirstOrDefaultAsync(t => t.Id == id);
-
-        if (trip == null)
-        {
-            return NotFound();
-        }
-
-        return Ok(MapToDto(trip, language));
+        var trip = await _tripRepository.GetByIdAsync(id);
+        return trip != null ? MapToDto(trip, language) : null;
     }
 
-    [HttpPost]
-    public async Task<ActionResult<TripDto>> CreateTrip(CreateTripDto dto, [FromQuery] string? lang = "en")
+    public async Task<TripDto> CreateTripAsync(CreateTripDto dto, string language = "en")
     {
-        var language = ValidateLanguage(lang);
         var trip = new Trip
         {
             Title = System.Text.Json.JsonSerializer.Serialize(dto.Title ?? new Dictionary<string, string>()),
@@ -66,7 +48,7 @@ public class TripsController : ControllerBase
             Inclusions = System.Text.Json.JsonSerializer.Serialize(dto.Inclusions ?? new List<Dictionary<string, string>>()),
             Exclusions = System.Text.Json.JsonSerializer.Serialize(dto.Exclusions ?? new List<Dictionary<string, string>>()),
             SpotsTotal = dto.SpotsTotal,
-            SpotsLeft = dto.SpotsTotal, // Set spots left to same as total on creation
+            SpotsLeft = dto.SpotsTotal,
             Itinerary = (dto.Itinerary ?? new List<CreateItineraryDayDto>()).Select(i => new ItineraryDay
             {
                 Day = i.Day,
@@ -75,23 +57,16 @@ public class TripsController : ControllerBase
             }).ToList()
         };
 
-        _context.Trips.Add(trip);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetTrip), new { id = trip.Id }, MapToDto(trip, language));
+        var createdTrip = await _tripRepository.AddAsync(trip);
+        return MapToDto(createdTrip, language);
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateTrip(Guid id, UpdateTripDto dto, [FromQuery] string? lang = "en")
+    public async Task<TripDto?> UpdateTripAsync(Guid id, UpdateTripDto dto, string language = "en")
     {
-        var language = ValidateLanguage(lang);
-        var trip = await _context.Trips
-            .Include(t => t.Itinerary)
-            .FirstOrDefaultAsync(t => t.Id == id);
-
+        var trip = await _tripRepository.GetByIdAsync(id);
         if (trip == null)
         {
-            return NotFound();
+            return null;
         }
 
         trip.Title = System.Text.Json.JsonSerializer.Serialize(dto.Title ?? new Dictionary<string, string>());
@@ -111,46 +86,39 @@ public class TripsController : ControllerBase
         // Remove existing itinerary
         if (trip.Itinerary != null && trip.Itinerary.Any())
         {
-            _context.ItineraryDays.RemoveRange(trip.Itinerary);
+            trip.Itinerary.Clear();
         }
 
         // Add new itinerary items
         if (dto.Itinerary != null && dto.Itinerary.Any())
         {
-            var newItineraryItems = dto.Itinerary.Select(i => new ItineraryDay
+            trip.Itinerary = dto.Itinerary.Select(i => new ItineraryDay
             {
                 TripId = trip.Id,
                 Day = i.Day,
                 Title = System.Text.Json.JsonSerializer.Serialize(i.Title ?? new Dictionary<string, string>()),
                 Activity = System.Text.Json.JsonSerializer.Serialize(i.Activity ?? new Dictionary<string, string>())
             }).ToList();
-            
-            _context.ItineraryDays.AddRange(newItineraryItems);
-            trip.Itinerary = newItineraryItems;
         }
         else
         {
             trip.Itinerary = new List<ItineraryDay>();
         }
 
-        await _context.SaveChangesAsync();
-
-        return Ok(MapToDto(trip, language));
+        await _tripRepository.UpdateAsync(trip);
+        return MapToDto(trip, language);
     }
 
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteTrip(Guid id)
+    public async Task<bool> DeleteTripAsync(Guid id)
     {
-        var trip = await _context.Trips.FindAsync(id);
+        var trip = await _tripRepository.GetByIdAsync(id);
         if (trip == null)
         {
-            return NotFound();
+            return false;
         }
 
-        _context.Trips.Remove(trip);
-        await _context.SaveChangesAsync();
-
-        return NoContent();
+        await _tripRepository.DeleteAsync(id);
+        return true;
     }
 
     private TripDto MapToDto(Trip trip, string language = "en")
@@ -158,7 +126,7 @@ public class TripsController : ControllerBase
         var endDate = trip.StartDate.AddDays(trip.DurationDays - 1);
         var dateString = FormatDateRange(trip.StartDate, endDate);
         var durationString = FormatDuration(trip.DurationDays);
-        var currencySymbol = _configuration["AppSettings:CurrencySymbol"] ?? "$";
+        var currencySymbol = _configurationService.GetCurrencySymbol();
         var priceString = FormatPrice(trip.Price, currencySymbol);
 
         return new TripDto
@@ -175,7 +143,7 @@ public class TripsController : ControllerBase
             Description = trip.GetDescription(language),
             HeroImage = trip.HeroImage,
             Gallery = trip.Gallery,
-            Itinerary = trip.Itinerary.Select(i => new ItineraryDayDto
+            Itinerary = trip.Itinerary.OrderBy(i => i.Day).Select(i => new ItineraryDayDto
             {
                 Id = i.Id,
                 Day = i.Day,
@@ -188,23 +156,6 @@ public class TripsController : ControllerBase
             SpotsLeft = trip.SpotsLeft,
             CreatedAt = trip.CreatedAt,
             UpdatedAt = trip.UpdatedAt
-        };
-    }
-
-    private static string ValidateLanguage(string? lang)
-    {
-        if (string.IsNullOrEmpty(lang))
-            return "en";
-        
-        // Normalize language code
-        lang = lang.ToLower().Trim();
-        
-        // Supported languages
-        return lang switch
-        {
-            "en" => "en",
-            "ar" => "ar",
-            _ => "en" // Default to English if unsupported
         };
     }
 
@@ -245,5 +196,11 @@ public class TripsController : ControllerBase
     {
         return $"{currencySymbol}{price:N2}";
     }
+}
+
+public interface IConfigurationService
+{
+    string GetCurrencySymbol();
+    string GetCurrency();
 }
 

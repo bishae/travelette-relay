@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
-namespace Travelette.Relay.Controllers;
+namespace Travelette.Relay.Presentation.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

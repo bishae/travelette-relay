@@ -1,6 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Travelette.Relay.Application.Services;
 using Travelette.Relay.Data;
+using Travelette.Relay.Domain.Repositories;
+using Travelette.Relay.Domain.Services;
+using Travelette.Relay.Infrastructure.HealthChecks;
+using Travelette.Relay.Infrastructure.Repositories;
+using Travelette.Relay.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,6 +42,21 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+// Register repositories (Domain interfaces -> Infrastructure implementations)
+builder.Services.AddScoped<ITripRepository, TripRepository>();
+builder.Services.AddScoped<IBookingRepository, BookingRepository>();
+
+// Register domain services (Domain interfaces -> Infrastructure implementations)
+builder.Services.AddScoped<IPaymentService, StripePaymentService>();
+
+// Register application services (Application interfaces -> Application implementations)
+builder.Services.AddScoped<ITripService, TripService>();
+builder.Services.AddScoped<IBookingService, BookingService>();
+builder.Services.AddScoped<IPaymentApplicationService, PaymentApplicationService>();
+
+// Register infrastructure services
+builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 
 // Add health checks
 builder.Services.AddHealthChecks()
@@ -84,33 +105,3 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
-
-// Custom health check for database
-public class DatabaseHealthCheck : IHealthCheck
-{
-    private readonly AppDbContext _dbContext;
-
-    public DatabaseHealthCheck(AppDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
-
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var canConnect = await _dbContext.Database.CanConnectAsync(cancellationToken);
-            if (canConnect)
-            {
-                return HealthCheckResult.Healthy("Database is available");
-            }
-            return HealthCheckResult.Unhealthy("Database is not available");
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("Database health check failed", ex);
-        }
-    }
-}

@@ -1,4 +1,4 @@
-namespace Travelette.Relay.Models;
+namespace Travelette.Relay.Domain.Entities;
 
 public class Booking
 {
