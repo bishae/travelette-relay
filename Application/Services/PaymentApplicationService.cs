@@ -174,11 +174,10 @@ public class PaymentApplicationService : IPaymentApplicationService
             ),
             cancellationToken);
 
-        // Store trip ID and calculate updated spots left
+        // Store trip ID
         var tripId = booking.TripId;
-        var updatedSpotsLeft = booking.Trip.SpotsLeft + spotsToRefund;
         
-        // Update booking and trip based on refund type
+        // Update booking based on refund type
         if (isFullRefund)
         {
             booking.Status = BookingStatus.Refunded;
@@ -194,11 +193,17 @@ public class PaymentApplicationService : IPaymentApplicationService
         await _bookingRepository.UpdateAsync(booking);
         
         // Explicitly update the trip to ensure SpotsLeft changes are persisted
-        // Reload the trip to get a tracked entity and update it
+        // Reload the trip to get the current state from the database (not stale navigation property)
         var trip = await _tripRepository.GetByIdAsync(tripId);
         if (trip != null)
         {
-            trip.SpotsLeft = updatedSpotsLeft;
+            // Use the current value from database and add the spots refunded
+            trip.SpotsLeft += spotsToRefund;
+            // Ensure SpotsLeft doesn't exceed SpotsTotal
+            if (trip.SpotsLeft > trip.SpotsTotal)
+            {
+                trip.SpotsLeft = trip.SpotsTotal;
+            }
             trip.UpdatedAt = DateTime.UtcNow;
             await _tripRepository.UpdateAsync(trip);
         }
@@ -317,17 +322,24 @@ public class PaymentApplicationService : IPaymentApplicationService
             booking.Status = BookingStatus.Paid;
             booking.UpdatedAt = DateTime.UtcNow;
 
-            if (booking.Trip != null)
-            {
-                booking.Trip.SpotsLeft -= booking.SpotsReserved;
-                if (booking.Trip.SpotsLeft < 0)
-                {
-                    booking.Trip.SpotsLeft = 0;
-                }
-                booking.Trip.UpdatedAt = DateTime.UtcNow;
-            }
-
             await _bookingRepository.UpdateAsync(booking);
+            
+            // Explicitly update the trip to ensure SpotsLeft changes are persisted
+            if (booking.TripId != default)
+            {
+                var trip = await _tripRepository.GetByIdAsync(booking.TripId);
+                if (trip != null)
+                {
+                    trip.SpotsLeft -= booking.SpotsReserved;
+                    if (trip.SpotsLeft < 0)
+                    {
+                        trip.SpotsLeft = 0;
+                    }
+                    trip.UpdatedAt = DateTime.UtcNow;
+                    await _tripRepository.UpdateAsync(trip);
+                }
+            }
+            
             _logger.LogInformation($"Payment succeeded for booking {booking.Id}, spots decremented");
         }
         catch (Exception ex)
