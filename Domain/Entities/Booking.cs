@@ -10,6 +10,7 @@ public class Booking
     public string CustomerName { get; set; } = string.Empty;
     public int SpotsReserved { get; set; }
     public decimal AmountPaid { get; set; }
+    public decimal AmountRefunded { get; set; }
     public BookingStatus Status { get; set; } = BookingStatus.Pending;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

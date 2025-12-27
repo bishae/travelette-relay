@@ -36,6 +36,7 @@ public class BookingService : IBookingService
             CustomerName = booking.CustomerName,
             SpotsReserved = booking.SpotsReserved,
             AmountPaid = booking.AmountPaid,
+            AmountRefunded = booking.AmountRefunded,
             Status = booking.Status.ToString(),
             CreatedAt = booking.CreatedAt,
             UpdatedAt = booking.UpdatedAt

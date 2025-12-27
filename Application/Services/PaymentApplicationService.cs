@@ -136,6 +136,19 @@ public class PaymentApplicationService : IPaymentApplicationService
             throw new InvalidOperationException("Booking trip information is missing");
         }
 
+        // Calculate available refund amount (what hasn't been refunded yet)
+        var availableRefundAmount = booking.AmountPaid - booking.AmountRefunded;
+        
+        if (availableRefundAmount <= 0)
+        {
+            throw new InvalidOperationException("No remaining amount available to refund on this booking.");
+        }
+
+        if (booking.SpotsReserved <= 0)
+        {
+            throw new InvalidOperationException("No spots remaining to refund on this booking.");
+        }
+
         decimal refundAmount;
         int spotsToRefund;
         bool isFullRefund;
@@ -154,32 +167,32 @@ public class PaymentApplicationService : IPaymentApplicationService
                 throw new InvalidOperationException($"Cannot refund {spotsToRefund} spots. Only {booking.SpotsReserved} spots are reserved.");
             }
 
-            var pricePerSpot = booking.AmountPaid / booking.SpotsReserved;
+            var pricePerSpot = availableRefundAmount / booking.SpotsReserved;
             refundAmount = pricePerSpot * spotsToRefund;
             isFullRefund = spotsToRefund == booking.SpotsReserved;
         }
         else if (dto.Amount.HasValue)
         {
             refundAmount = dto.Amount.Value;
-            if (refundAmount <= 0 || refundAmount > booking.AmountPaid)
+            if (refundAmount <= 0 || refundAmount > availableRefundAmount)
             {
-                throw new ArgumentException($"Refund amount must be between 0 and {booking.AmountPaid}", nameof(dto));
+                throw new ArgumentException($"Refund amount must be between 0 and {availableRefundAmount} (available refund amount)", nameof(dto));
             }
 
-            var pricePerSpot = booking.AmountPaid / booking.SpotsReserved;
+            var pricePerSpot = availableRefundAmount / booking.SpotsReserved;
             spotsToRefund = (int)Math.Round(refundAmount / pricePerSpot);
             
             if (spotsToRefund > booking.SpotsReserved)
             {
                 spotsToRefund = booking.SpotsReserved;
-                refundAmount = booking.AmountPaid;
+                refundAmount = availableRefundAmount;
             }
             
-            isFullRefund = refundAmount == booking.AmountPaid;
+            isFullRefund = refundAmount == availableRefundAmount;
         }
         else
         {
-            refundAmount = booking.AmountPaid;
+            refundAmount = availableRefundAmount;
             spotsToRefund = booking.SpotsReserved;
             isFullRefund = true;
         }
@@ -203,6 +216,8 @@ public class PaymentApplicationService : IPaymentApplicationService
             booking.SpotsReserved -= spotsToRefund;
         }
         
+        // Track the refunded amount
+        booking.AmountRefunded += refundAmount;
         booking.UpdatedAt = DateTime.UtcNow;
 
         await _bookingRepository.UpdateAsync(booking);
