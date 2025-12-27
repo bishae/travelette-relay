@@ -97,6 +97,24 @@ public class PaymentApplicationService : IPaymentApplicationService
 
     public async Task<RefundResult> ProcessRefundAsync(RefundBookingDto dto, CancellationToken cancellationToken = default)
     {
+        // Get trip ID before processing refund
+        var booking = await _bookingRepository.GetByIdAsync(dto.BookingId);
+        if (booking == null)
+        {
+            throw new InvalidOperationException($"Booking not found: {dto.BookingId}");
+        }
+        var tripId = booking.TripId;
+        
+        var result = await ProcessRefundInternalAsync(dto, cancellationToken);
+        
+        // Update trip after refund
+        await UpdateTripSpotsAsync(tripId, result.SpotsRefunded);
+        
+        return result;
+    }
+
+    private async Task<RefundResult> ProcessRefundInternalAsync(RefundBookingDto dto, CancellationToken cancellationToken = default)
+    {
         var booking = await _bookingRepository.GetByIdAsync(dto.BookingId);
         if (booking == null)
         {
@@ -173,9 +191,6 @@ public class PaymentApplicationService : IPaymentApplicationService
                 dto.Reason
             ),
             cancellationToken);
-
-        // Store trip ID
-        var tripId = booking.TripId;
         
         // Update booking based on refund type
         if (isFullRefund)
@@ -191,22 +206,6 @@ public class PaymentApplicationService : IPaymentApplicationService
         booking.UpdatedAt = DateTime.UtcNow;
 
         await _bookingRepository.UpdateAsync(booking);
-        
-        // Explicitly update the trip to ensure SpotsLeft changes are persisted
-        // Reload the trip to get the current state from the database (not stale navigation property)
-        var trip = await _tripRepository.GetByIdAsync(tripId);
-        if (trip != null)
-        {
-            // Use the current value from database and add the spots refunded
-            trip.SpotsLeft += spotsToRefund;
-            // Ensure SpotsLeft doesn't exceed SpotsTotal
-            if (trip.SpotsLeft > trip.SpotsTotal)
-            {
-                trip.SpotsLeft = trip.SpotsTotal;
-            }
-            trip.UpdatedAt = DateTime.UtcNow;
-            await _tripRepository.UpdateAsync(trip);
-        }
 
         return new RefundResult(
             refundResult.RefundId,
@@ -215,6 +214,26 @@ public class PaymentApplicationService : IPaymentApplicationService
             booking.SpotsReserved,
             isFullRefund
         );
+    }
+
+    private async Task UpdateTripSpotsAsync(Guid tripId, int spotsToAdd)
+    {
+        var trip = await _tripRepository.GetByIdAsync(tripId);
+        if (trip != null)
+        {
+            trip.SpotsLeft += spotsToAdd;
+            // Ensure SpotsLeft doesn't exceed SpotsTotal or go below 0
+            if (trip.SpotsLeft > trip.SpotsTotal)
+            {
+                trip.SpotsLeft = trip.SpotsTotal;
+            }
+            if (trip.SpotsLeft < 0)
+            {
+                trip.SpotsLeft = 0;
+            }
+            trip.UpdatedAt = DateTime.UtcNow;
+            await _tripRepository.UpdateAsync(trip);
+        }
     }
 
     public async Task<RefundAllResult> RefundAllBookingsForTripAsync(Guid tripId, string? reason = null, CancellationToken cancellationToken = default)
@@ -239,8 +258,7 @@ public class PaymentApplicationService : IPaymentApplicationService
         int totalSpotsRefunded = 0;
         decimal totalAmountRefunded = 0;
 
-        // Refund each booking
-        // Note: ProcessRefundAsync now handles trip updates explicitly
+        // Refund each booking without updating trip (we'll update trip once at the end)
         foreach (var booking in paidBookings)
         {
             try
@@ -251,7 +269,7 @@ public class PaymentApplicationService : IPaymentApplicationService
                     Reason = reason
                 };
 
-                var refundResult = await ProcessRefundAsync(refundDto, cancellationToken);
+                var refundResult = await ProcessRefundInternalAsync(refundDto, cancellationToken);
                 individualRefunds.Add(refundResult);
                 totalSpotsRefunded += refundResult.SpotsRefunded;
                 totalAmountRefunded += refundResult.Amount;
@@ -265,6 +283,12 @@ public class PaymentApplicationService : IPaymentApplicationService
                 // Continue with other bookings even if one fails
                 // The error will be logged but we'll still try to refund the rest
             }
+        }
+
+        // Update trip once with total spots refunded
+        if (totalSpotsRefunded > 0)
+        {
+            await UpdateTripSpotsAsync(tripId, totalSpotsRefunded);
         }
 
         _logger.LogInformation(

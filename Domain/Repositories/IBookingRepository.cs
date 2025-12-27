@@ -10,5 +10,6 @@ public interface IBookingRepository
     Task<IEnumerable<Booking>> GetByTripIdAsync(Guid tripId);
     Task<Booking> AddAsync(Booking booking);
     Task UpdateAsync(Booking booking);
+    Task DeleteByTripIdAsync(Guid tripId);
 }
 

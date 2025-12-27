@@ -57,5 +57,18 @@ public class BookingRepository : IBookingRepository
         _context.Bookings.Update(booking);
         await _context.SaveChangesAsync();
     }
+
+    public async Task DeleteByTripIdAsync(Guid tripId)
+    {
+        var bookings = await _context.Bookings
+            .Where(b => b.TripId == tripId)
+            .ToListAsync();
+        
+        if (bookings.Any())
+        {
+            _context.Bookings.RemoveRange(bookings);
+            await _context.SaveChangesAsync();
+        }
+    }
 }
 

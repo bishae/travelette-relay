@@ -133,6 +133,10 @@ public class TripService : ITripService
                 "Please refund all customers before deleting the trip.");
         }
 
+        // Delete all bookings (including refunded ones) before deleting the trip
+        // This is necessary because of the foreign key constraint (DeleteBehavior.Restrict)
+        await _bookingRepository.DeleteByTripIdAsync(id);
+
         await _tripRepository.DeleteAsync(id);
         return true;
     }
