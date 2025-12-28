@@ -1,5 +1,6 @@
 // Legacy compatibility file - kept for migrations compatibility
 // All new code should use Travelette.Relay.Infrastructure.Data.AppDbContext
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Travelette.Relay.Domain.Entities;
 
@@ -27,7 +28,11 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Gallery)
                 .HasConversion(
                     v => string.Join("|||", v),
-                    v => v.Split("|||", StringSplitOptions.RemoveEmptyEntries).ToList());
+                    v => v.Split("|||", StringSplitOptions.RemoveEmptyEntries).ToList(),
+                    new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<string>>(
+                        (c1, c2) => c1 != null && c2 != null && c1.SequenceEqual(c2),
+                        c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                        c => c.ToList()));
         });
 
         modelBuilder.Entity<ItineraryDay>(entity =>
